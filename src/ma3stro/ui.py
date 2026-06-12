@@ -132,17 +132,19 @@ class Renderer:
         self.title = title
         self.has_cues = bool(sheet.cues)
 
-    def render(self, position: float, duration: float, paused: bool) -> Layout:
+    def render(
+        self, position: float, duration: float, paused: bool, volume: float = 1.0
+    ) -> Layout:
         w, h = self.console.size
         root = Layout()
         root.split_column(
             Layout(name="body"),
-            Layout(name="footer", size=3),
+            Layout(name="footer", size=4),
         )
 
         sidebar_w = max(24, w // 4) if self.has_cues else 0
         clock_w = w - sidebar_w - 6  # account for panel borders/padding
-        clock_h = int((h - 3) * 0.85)
+        clock_h = int((h - 4) * 0.85)
 
         clock = render_big(fmt_time(position), clock_w, clock_h)
         sub = Text(f"{fmt_time(position)} / {fmt_time(duration)}", style="dim", justify="center")
@@ -167,13 +169,23 @@ class Renderer:
         # footer: progress bar + controls
         bar = ProgressBar(total=max(duration, 0.001), completed=position, width=None)
         status = "⏸ PAUSED" if paused else "▶ PLAYING"
+        vol = "🔇 muted" if volume <= 0 else f"🔊 {int(round(volume * 100))}%"
         controls = Text.assemble(
-            (f"{status}   ", "bold green" if not paused else "bold yellow"),
-            ("[space]", "bold"), " play/pause   ",
-            ("[←/→]", "bold"), " seek 5s   ",
-            ("[q]", "bold"), " quit",
+            (f"{status}  ", "bold green" if not paused else "bold yellow"),
+            (f"{vol}  ", "bold cyan"),
+            ("space", "bold"), " play  ",
+            ("←/→", "bold"), " seek  ",
+            ("↑/↓", "bold"), " vol  ",
+            ("m", "bold"), " mute  ",
+            ("q", "bold"), " quit",
             style="dim",
+            # Keep to one line so the progress bar always keeps its own row in
+            # the fixed-height footer; on narrow terminals the hints crop.
+            no_wrap=True,
+            overflow="ellipsis",
         )
-        footer = Group(bar, controls)
+        # Controls first, bar last: ProgressBar emits no trailing newline, so a
+        # following renderable would share its line. Putting it last avoids that.
+        footer = Group(controls, bar)
         root["footer"].update(Panel(footer, border_style="dim"))
         return root

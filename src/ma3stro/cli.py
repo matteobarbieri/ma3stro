@@ -18,6 +18,7 @@ from .player import Player
 from .ui import Renderer
 
 SEEK_SECONDS = 5.0
+VOLUME_STEP = 0.05
 REFRESH_HZ = 15
 
 
@@ -81,6 +82,12 @@ def main(argv: list[str] | None = None) -> int:
             player.seek(-SEEK_SECONDS)
         elif key == "right":
             player.seek(SEEK_SECONDS)
+        elif key == "up":
+            player.adjust_volume(VOLUME_STEP)
+        elif key == "down":
+            player.adjust_volume(-VOLUME_STEP)
+        elif key == "m":
+            player.toggle_mute()
 
     keys = KeyReader(on_key)
     keys.start()
@@ -88,7 +95,9 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         with Live(
-            renderer.render(player.position, player.duration, player.paused),
+            renderer.render(
+                player.position, player.duration, player.paused, player.volume
+            ),
             console=console,
             screen=True,
             refresh_per_second=REFRESH_HZ,
@@ -96,7 +105,9 @@ def main(argv: list[str] | None = None) -> int:
         ) as live:
             while not quit_flag["q"] and not player.finished:
                 live.update(
-                    renderer.render(player.position, player.duration, player.paused)
+                    renderer.render(
+                        player.position, player.duration, player.paused, player.volume
+                    )
                 )
                 time.sleep(1 / REFRESH_HZ)
     except KeyboardInterrupt:

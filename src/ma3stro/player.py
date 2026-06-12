@@ -45,6 +45,8 @@ class Player:
         self._pos = 0  # next frame to play
         self._paused = False
         self._finished = False
+        self._gain = 1.0  # linear playback gain in [0, 1]
+        self._muted = False
         self._lock = threading.Lock()
         self._stream: sd.OutputStream | None = None
 
@@ -72,7 +74,8 @@ class Player:
             start = self._pos
             end = min(start + frames, self.total_frames)
             n = end - start
-            outdata[:n] = self._buf[start:end]
+            gain = 0.0 if self._muted else self._gain
+            outdata[:n] = self._buf[start:end] * gain
             if n < frames:
                 outdata[n:].fill(0)
                 self._finished = True
@@ -97,6 +100,17 @@ class Player:
             if self._pos < self.total_frames:
                 self._finished = False
 
+    def adjust_volume(self, delta: float) -> None:
+        """Change the playback gain by ``delta`` (clamped to [0, 1])."""
+        with self._lock:
+            self._gain = max(0.0, min(1.0, self._gain + delta))
+            if self._gain > 0:
+                self._muted = False
+
+    def toggle_mute(self) -> None:
+        with self._lock:
+            self._muted = not self._muted
+
     # -- state -------------------------------------------------------------
     @property
     def position(self) -> float:
@@ -106,6 +120,16 @@ class Player:
     @property
     def paused(self) -> bool:
         return self._paused
+
+    @property
+    def volume(self) -> float:
+        """Effective gain, accounting for mute."""
+        with self._lock:
+            return 0.0 if self._muted else self._gain
+
+    @property
+    def muted(self) -> bool:
+        return self._muted
 
     @property
     def finished(self) -> bool:
