@@ -19,7 +19,14 @@ A command-line backing-track player that shows a **large ASCII clock** and a
 
 ## Install
 
-Requires **ffmpeg** for mp3/m4a decoding (wav works without it):
+Requires **[uv](https://docs.astral.sh/uv/)** to manage the environment and run
+the tool:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh   # or: brew install uv
+```
+
+Also requires **ffmpeg** for mp3/m4a decoding (wav works without it):
 
 ```bash
 brew install ffmpeg          # macOS
