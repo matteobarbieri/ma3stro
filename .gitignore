@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Generated audio test artifacts
+examples/*.wav
+examples/*.mp3
+examples/*.m4a

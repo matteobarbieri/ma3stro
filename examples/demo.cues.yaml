@@ -1,0 +1,15 @@
+# Example cue sheet. Name it "<track>.cues.yaml" next to your audio file
+# (e.g. backing.m4a -> backing.cues.yaml) and it loads automatically,
+# or pass it explicitly with --cues.
+
+show_countdown: true   # optional; --no-countdown overrides this at runtime
+
+cues:
+  - { time: "0:00", label: "Intro",    art: "🎵" }
+  - { time: "0:16", label: "Verse 1" }
+  - { time: "1:04", label: "Chorus",   art: "🎸" }
+  - { time: "1:36", label: "Verse 2" }
+  - { time: "2:24", label: "Chorus",   art: "🎸" }
+  - { time: "2:56", label: "Bridge",   art: "✋ quiet" }
+  - { time: "3:20", label: "Solo",     art: "🔥" }
+  - { time: "3:52", label: "Outro",    art: "🎵 fade" }
