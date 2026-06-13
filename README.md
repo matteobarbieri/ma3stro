@@ -78,4 +78,29 @@ cues:
 | --- | --- |
 | `space` | Play / pause |
 | `←` / `→` | Seek ∓5 seconds |
+| `↑` / `↓` | Volume ±5% |
+| `m` | Mute / unmute |
 | `q` | Quit |
+
+## Web version
+
+`web/index.html` is a self-contained, browser-based port with the same
+look — big block-glyph clock, cue sidebar, progress footer — and the same
+keyboard controls. It plays through the native `<audio>` element, so there
+are no Python dependencies and nothing to decode up front.
+
+Open it directly, or serve the folder:
+
+```bash
+open web/index.html              # macOS — just double-click works too
+# or, if your browser blocks file:// drops:
+uv run python -m http.server -d web 8000   # then visit localhost:8000
+```
+
+Drop a backing track (or click **Choose track**); optionally add a cue
+sheet with **Add cues** (the same `.cues.yaml` format, or `.json` with the
+same shape). Supported audio is whatever the browser can play
+(`wav`, `mp3`, `m4a`, `ogg`, `flac`, …).
+
+You can pre-set the CLI-equivalent flags via the URL query string:
+`index.html?volume=70&start=30` (volume 0–100, start in seconds).

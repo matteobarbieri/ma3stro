@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>ma3stro</title>
+<style>
+  /* Terminal look-alike: monospace, dark background, box-drawing panels.
+     Mirrors the rich TUI in src/ma3stro/ui.py. */
+  :root {
+    --bg:      #0c0c0c;
+    --fg:      #cccccc;
+    --dim:     #6c6c6c;
+    --cyan:    #45d6d6;
+    --magenta: #d75fd7;
+    --green:   #5fd75f;
+    --yellow:  #d7d75f;
+    --font: "SF Mono", "JetBrains Mono", "Menlo", "DejaVu Sans Mono",
+            "Consolas", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--bg); color: var(--fg);
+    font-family: var(--font);
+    overflow: hidden;
+  }
+  body { display: flex; flex-direction: column; height: 100vh; padding: 10px; gap: 8px; }
+
+  /* A panel = bordered box with a title chip sitting on the top border, like
+     a rich.Panel. */
+  .panel {
+    position: relative;
+    border: 1px solid var(--dim);
+    border-radius: 2px;
+    padding: 10px 12px;
+    min-height: 0;
+  }
+  .panel > .title {
+    position: absolute;
+    top: -0.72em; left: 1.2ch;
+    background: var(--bg);
+    padding: 0 0.6ch;
+    font-size: 0.85em;
+    letter-spacing: 0.1ch;
+    text-transform: none;
+  }
+  .panel.cyan    { border-color: var(--cyan); }
+  .panel.cyan    > .title { color: var(--cyan); }
+  .panel.magenta { border-color: var(--magenta); }
+  .panel.magenta > .title { color: var(--magenta); }
+  .panel.dimbox  { border-color: var(--dim); }
+  .panel.dimbox  > .title { color: var(--dim); }
+
+  /* ---- body: clock + cue sidebar ---- */
+  #body { flex: 1 1 auto; display: flex; gap: 8px; min-height: 0; }
+
+  #clock-panel { flex: 1 1 auto; display: flex; min-width: 0; }
+  #clock-wrap {
+    flex: 1 1 auto;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    min-width: 0; min-height: 0;
+  }
+  #clock {
+    margin: 0;
+    line-height: 1;
+    color: var(--cyan);
+    font-weight: 700;
+    white-space: pre;
+    text-shadow: 0 0 6px rgba(69, 214, 214, 0.35);
+  }
+  #clock-sub { color: var(--dim); margin-top: 0.8em; font-size: 0.95em; }
+
+  #cues-panel { flex: 0 0 28ch; overflow: hidden; }
+  #cues-panel.hidden { display: none; }
+  #cues { font-size: 0.95em; line-height: 1.5; white-space: pre-wrap; }
+  .label-dim   { color: var(--dim); }
+  .now-label   { color: var(--green); font-weight: 700; }
+  .next-label  { color: var(--yellow); font-weight: 700; }
+  .next-count  { color: var(--yellow); }
+  .heading     { color: var(--dim); font-weight: 700; letter-spacing: 0.15ch; }
+  .cue-sub     { color: var(--dim); }
+  .blank       { display: block; height: 0.6em; }
+
+  /* ---- footer: progress bar + controls ---- */
+  #footer-panel { flex: 0 0 auto; }
+  #controls { white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+              color: var(--dim); margin-bottom: 4px; }
+  #controls .status-play  { color: var(--green); font-weight: 700; }
+  #controls .status-pause { color: var(--yellow); font-weight: 700; }
+  #controls .vol          { color: var(--cyan); font-weight: 700; }
+  #controls .key { color: var(--fg); font-weight: 700; }
+  #bar { white-space: pre; color: var(--cyan); line-height: 1; cursor: pointer;
+         letter-spacing: 0; user-select: none; }
+  #bar .rest { color: var(--dim); }
+
+  /* ---- landing screen ---- */
+  #landing {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg); z-index: 10; padding: 24px;
+  }
+  #landing.hidden { display: none; }
+  #drop {
+    border: 1px dashed var(--cyan); border-radius: 4px;
+    padding: 40px 48px; max-width: 640px; text-align: center;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  #drop.over { background: rgba(69, 214, 214, 0.08); border-style: solid; }
+  #drop h1 { color: var(--cyan); margin: 0 0 4px; font-size: 2.2em; letter-spacing: 0.2ch; }
+  #drop .tag { color: var(--dim); margin-bottom: 24px; }
+  #drop p { color: var(--fg); margin: 8px 0; }
+  #drop .hint { color: var(--dim); font-size: 0.9em; }
+  #drop .err { color: var(--magenta); min-height: 1.2em; margin-top: 12px; }
+  .btn {
+    display: inline-block; margin: 8px 4px 4px; cursor: pointer;
+    background: transparent; color: var(--cyan);
+    border: 1px solid var(--cyan); border-radius: 2px;
+    padding: 8px 16px; font-family: var(--font); font-size: 1em;
+  }
+  .btn:hover { background: rgba(69, 214, 214, 0.12); }
+  .btn.alt { color: var(--magenta); border-color: var(--magenta); }
+  .btn.alt:hover { background: rgba(215, 95, 215, 0.12); }
+  #cue-name { color: var(--magenta); font-size: 0.9em; min-height: 1.2em; margin-top: 8px; }
+  kbd {
+    background: #1c1c1c; border: 1px solid var(--dim); border-radius: 3px;
+    padding: 0 5px; color: var(--fg); font-family: var(--font); font-size: 0.85em;
+  }
+</style>
+</head>
+<body>
+  <!-- Landing / file picker -->
+  <div id="landing">
+    <div id="drop">
+      <h1>ma3stro</h1>
+      <div class="tag">backing-track player — big clock + side cues</div>
+      <p>Drop a backing track here, or pick one.</p>
+      <p class="hint">wav, mp3, m4a, ogg, flac — anything your browser can play.</p>
+      <div>
+        <label class="btn">Choose track
+          <input id="file-audio" type="file" accept="audio/*" hidden />
+        </label>
+        <label class="btn alt">Add cues (.yaml)
+          <input id="file-cues" type="file" accept=".yaml,.yml,.json,text/yaml" hidden />
+        </label>
+      </div>
+      <div id="cue-name"></div>
+      <p class="hint" style="margin-top:20px;">
+        <kbd>space</kbd> play · <kbd>←</kbd>/<kbd>→</kbd> seek ·
+        <kbd>↑</kbd>/<kbd>↓</kbd> vol · <kbd>m</kbd> mute · <kbd>q</kbd> quit
+      </p>
+      <div class="err" id="err"></div>
+    </div>
+  </div>
+
+  <!-- Player -->
+  <div id="body">
+    <div id="clock-panel" class="panel cyan">
+      <span class="title" id="clock-title">track</span>
+      <div id="clock-wrap">
+        <pre id="clock"></pre>
+        <div id="clock-sub">00:00 / 00:00</div>
+      </div>
+    </div>
+    <div id="cues-panel" class="panel magenta hidden">
+      <span class="title">CUES</span>
+      <div id="cues"></div>
+    </div>
+  </div>
+
+  <div id="footer-panel" class="panel dimbox">
+    <div id="controls"></div>
+    <div id="bar" title="click to seek"></div>
+  </div>
+
+  <audio id="audio"></audio>
+
+<script>
+"use strict";
+
+/* ===================================================================
+   Cue sheet — ported from src/ma3stro/cues.py
+   =================================================================== */
+
+// parse_time: accepts m:ss, mm:ss, h:mm:ss, or a raw number of seconds.
+function parseTime(value) {
+  if (typeof value === "number") return value;
+  const s = String(value).trim();
+  const parts = s.split(":");
+  if (parts.length === 1) return parseFloat(parts[0]);
+  let seconds = 0;
+  for (const part of parts) seconds = seconds * 60 + parseFloat(part);
+  return seconds;
+}
+
+function bisectRight(arr, x) {
+  let lo = 0, hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (x < arr[mid]) hi = mid; else lo = mid + 1;
+  }
+  return lo;
+}
+
+class CueSheet {
+  constructor(cues = [], showCountdown = true) {
+    this.cues = cues.slice().sort((a, b) => a.time - b.time);
+    this.showCountdown = showCountdown;
+    this.starts = this.cues.map((c) => c.time);
+  }
+  indexAt(position) { return bisectRight(this.starts, position) - 1; }
+  current(position) {
+    const i = this.indexAt(position);
+    return i >= 0 ? this.cues[i] : null;
+  }
+  upcoming(position) { return this.cues.slice(this.indexAt(position) + 1); }
+}
+
+/* Minimal YAML reader for the cue-sheet subset documented in the README:
+   a `show_countdown` boolean plus a `cues:` list of flow maps
+   (`- { time: "0:00", label: "Intro", art: "🎵" }`) or block maps
+   (`- time: "0:00"` followed by indented `label:` / `art:` lines).
+   Also accepts a JSON file with the same shape. */
+function unquote(v) {
+  v = v.trim();
+  if (v.length >= 2 &&
+      ((v[0] === '"' && v[v.length - 1] === '"') ||
+       (v[0] === "'" && v[v.length - 1] === "'"))) {
+    return v.slice(1, -1);
+  }
+  return v;
+}
+
+// Split on a delimiter, ignoring delimiters inside quotes.
+function splitOutsideQuotes(s, delim) {
+  const out = [];
+  let cur = "", q = null;
+  for (const ch of s) {
+    if (q) { if (ch === q) q = null; cur += ch; }
+    else if (ch === '"' || ch === "'") { q = ch; cur += ch; }
+    else if (ch === delim) { out.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+function stripComment(line) {
+  let q = null;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (q) { if (ch === q) q = null; }
+    else if (ch === '"' || ch === "'") q = ch;
+    else if (ch === "#") return line.slice(0, i);
+  }
+  return line;
+}
+
+function parseFlowMap(body) {
+  // body is the contents between { and }
+  const obj = {};
+  for (const pair of splitOutsideQuotes(body, ",")) {
+    const t = pair.trim();
+    if (!t) continue;
+    const idx = t.indexOf(":");
+    if (idx < 0) continue;
+    obj[t.slice(0, idx).trim()] = unquote(t.slice(idx + 1));
+  }
+  return obj;
+}
+
+function toBool(v) {
+  return String(v).trim().toLowerCase() === "true" ||
+         String(v).trim() === "1";
+}
+
+function parseCueText(text, filename) {
+  if (/\.json$/i.test(filename || "")) {
+    const data = JSON.parse(text) || {};
+    return buildSheet(data);
+  }
+  const lines = text.split(/\r?\n/);
+  const data = { show_countdown: true, cues: [] };
+  let inCues = false;
+  let current = null; // open block-style item
+
+  for (const raw of lines) {
+    const line = stripComment(raw);
+    if (!line.trim()) continue;
+    const indent = line.length - line.trimStart().length;
+    const trimmed = line.trim();
+
+    if (!inCues) {
+      if (/^cues\s*:/.test(trimmed)) { inCues = true; continue; }
+      const m = trimmed.match(/^([A-Za-z_][\w-]*)\s*:\s*(.*)$/);
+      if (m && m[1] === "show_countdown") data.show_countdown = toBool(m[2]);
+      continue;
+    }
+
+    if (trimmed.startsWith("-")) {
+      const rest = trimmed.slice(1).trim();
+      current = null;
+      if (rest.startsWith("{")) {
+        const body = rest.replace(/^\{/, "").replace(/\}$/, "");
+        data.cues.push(parseFlowMap(body));
+      } else {
+        current = {};
+        data.cues.push(current);
+        const m = rest.match(/^([\w-]+)\s*:\s*(.*)$/);
+        if (m) current[m[1]] = unquote(m[2]);
+      }
+    } else if (current) {
+      // continuation line of a block-style item
+      const m = trimmed.match(/^([\w-]+)\s*:\s*(.*)$/);
+      if (m) current[m[1]] = unquote(m[2]);
+    }
+  }
+  return buildSheet(data);
+}
+
+function buildSheet(data) {
+  const cues = (data.cues || [])
+    .filter((c) => c && c.time !== undefined && c.time !== null && c.time !== "")
+    .map((c) => ({
+      time: parseTime(c.time),
+      label: c.label != null ? String(c.label) : "",
+      art: c.art != null ? String(c.art) : "",
+    }));
+  const sc = data.show_countdown;
+  return new CueSheet(cues, sc === undefined ? true : !!sc);
+}
+
+/* ===================================================================
+   Big ASCII clock — ported from src/ma3stro/ui.py
+   =================================================================== */
+
+const GLYPHS = {
+  "0": ["###", "# #", "# #", "# #", "###"],
+  "1": ["  #", "  #", "  #", "  #", "  #"],
+  "2": ["###", "  #", "###", "#  ", "###"],
+  "3": ["###", "  #", "###", "  #", "###"],
+  "4": ["# #", "# #", "###", "  #", "  #"],
+  "5": ["###", "#  ", "###", "  #", "###"],
+  "6": ["###", "#  ", "###", "# #", "###"],
+  "7": ["###", "  #", "  #", "  #", "  #"],
+  "8": ["###", "# #", "###", "# #", "###"],
+  "9": ["###", "# #", "###", "  #", "###"],
+  ":": [" ", "#", " ", "#", " "],
+  " ": ["   ", "   ", "   ", "   ", "   "],
+};
+const BASE_H = 5;
+const GLYPH_GAP = 1;
+
+function fmtTime(seconds) {
+  seconds = Math.max(0, Math.floor(seconds || 0));
+  const h = Math.floor(seconds / 3600);
+  const rem = seconds % 3600;
+  const m = Math.floor(rem / 60);
+  const s = rem % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+function baseWidth(text) {
+  let width = 0;
+  for (let i = 0; i < text.length; i++) {
+    const g = GLYPHS[text[i]] || GLYPHS[" "];
+    width += g[0].length;
+    if (i < text.length - 1) width += GLYPH_GAP;
+  }
+  return width;
+}
+
+function renderBig(text, maxW, maxH) {
+  const baseW = baseWidth(text) || 1;
+  // Cells are taller than wide, so let horizontal scale run ahead of vertical.
+  const sy = Math.max(1, Math.floor(maxH / BASE_H));
+  let sx = Math.max(1, Math.floor(maxW / baseW));
+  sx = Math.min(sx, sy * 2 + 1);
+
+  const rows = new Array(BASE_H * sy).fill("");
+  for (let i = 0; i < text.length; i++) {
+    const glyph = GLYPHS[text[i]] || GLYPHS[" "];
+    for (let r = 0; r < BASE_H; r++) {
+      let line = "";
+      for (const c of glyph[r]) line += (c === "#" ? "█" : " ").repeat(sx);
+      for (let k = 0; k < sy; k++) rows[r * sy + k] += line;
+    }
+    if (i < text.length - 1) {
+      const gap = " ".repeat(GLYPH_GAP * sx);
+      for (let r = 0; r < rows.length; r++) rows[r] += gap;
+    }
+  }
+  return rows.join("\n");
+}
+
+/* ===================================================================
+   Player state + UI wiring
+   =================================================================== */
+
+const SEEK_SECONDS = 5;
+const VOLUME_STEP = 0.05;
+
+const audio = document.getElementById("audio");
+const els = {
+  landing: document.getElementById("landing"),
+  drop: document.getElementById("drop"),
+  err: document.getElementById("err"),
+  cueName: document.getElementById("cue-name"),
+  fileAudio: document.getElementById("file-audio"),
+  fileCues: document.getElementById("file-cues"),
+  clock: document.getElementById("clock"),
+  clockSub: document.getElementById("clock-sub"),
+  clockTitle: document.getElementById("clock-title"),
+  cuesPanel: document.getElementById("cues-panel"),
+  cues: document.getElementById("cues"),
+  controls: document.getElementById("controls"),
+  bar: document.getElementById("bar"),
+  clockPanel: document.getElementById("clock-panel"),
+};
+
+let sheet = new CueSheet([]);     // active cue sheet
+let pendingCueText = null;        // cues chosen before the track loads
+let pendingCueName = null;
+let trackUrl = null;              // object URL to revoke on quit
+let playing = false;
+let gain = 0.5;                   // last non-muted volume
+
+// CLI parity: ?volume=0-100 and ?start=seconds.
+const params = new URLSearchParams(location.search);
+const startVolume = clampVol(params.has("volume")
+  ? parseFloat(params.get("volume")) / 100 : 0.5);
+const startOffset = params.has("start") ? parseFloat(params.get("start")) : 0;
+gain = startVolume;
+
+function clampVol(v) { return Math.max(0, Math.min(1, isNaN(v) ? 0.5 : v)); }
+
+/* ---- char-cell measurement for the clock ---- */
+let charW = 8, charH = 16;
+function measureCell() {
+  const probe = document.createElement("pre");
+  probe.style.cssText =
+    "position:absolute;visibility:hidden;margin:0;line-height:1;" +
+    "white-space:pre;font-weight:700;";
+  probe.style.font = getComputedStyle(els.clock).font;
+  probe.textContent = "█".repeat(10) + "\n█\n█\n█\n█";
+  document.body.appendChild(probe);
+  const rect = probe.getBoundingClientRect();
+  charW = rect.width / 10;
+  charH = rect.height / 5;
+  probe.remove();
+}
+
+/* ---- rendering loop ---- */
+function drawClock(position, duration) {
+  const wrap = els.clock.parentElement;
+  const cols = Math.max(1, Math.floor(wrap.clientWidth / charW));
+  // Reserve a couple of rows for the sub-line below the clock.
+  const rows = Math.max(BASE_H, Math.floor((wrap.clientHeight / charH) * 0.82));
+  const timeStr = fmtTime(position);
+  els.clock.textContent = renderBig(timeStr, cols, rows);
+  els.clockSub.textContent = `${fmtTime(position)} / ${fmtTime(duration)}`;
+}
+
+function esc(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function drawCues(position) {
+  if (!sheet.cues.length) { els.cuesPanel.classList.add("hidden"); return; }
+  els.cuesPanel.classList.remove("hidden");
+
+  const current = sheet.current(position);
+  const upcoming = sheet.upcoming(position);
+  const parts = [];
+
+  parts.push(`<span class="heading">NOW</span>`);
+  if (current) {
+    let line = `<span class="now-label">▸ ${esc(current.label)}</span>`;
+    if (current.art) line += `  ${esc(current.art)}`;
+    parts.push(line);
+  } else {
+    parts.push(`<span class="label-dim">—</span>`);
+  }
+
+  parts.push(`<span class="blank"></span>`);
+  parts.push(`<span class="heading">NEXT</span>`);
+  if (upcoming.length) {
+    const nxt = upcoming[0];
+    let line = `<span class="next-label">▸ ${esc(nxt.label)}</span>`;
+    if (sheet.showCountdown) {
+      const remaining = Math.max(0, Math.floor(nxt.time - position));
+      line += `<span class="next-count">  in ${remaining}s</span>`;
+    }
+    if (nxt.art) line += `  ${esc(nxt.art)}`;
+    parts.push(line);
+    for (const cue of upcoming.slice(1, 6)) {
+      let sub = `<span class="cue-sub">· ${esc(cue.label)}`;
+      if (cue.art) sub += `  ${esc(cue.art)}`;
+      sub += `</span>`;
+      parts.push(sub);
+    }
+  } else {
+    parts.push(`<span class="label-dim">—</span>`);
+  }
+
+  els.cues.innerHTML = parts.join("<br>");
+}
+
+function drawFooter(position, duration) {
+  const paused = audio.paused;
+  const volume = audio.muted ? 0 : audio.volume;
+
+  const status = paused
+    ? `<span class="status-pause">⏸ PAUSED</span>`
+    : `<span class="status-play">▶ PLAYING</span>`;
+  const vol = volume <= 0
+    ? `<span class="vol">🔇 muted</span>`
+    : `<span class="vol">🔊 ${Math.round(volume * 100)}%</span>`;
+  els.controls.innerHTML =
+    `${status}  ${vol}  ` +
+    `<span class="key">space</span> play  ` +
+    `<span class="key">←/→</span> seek  ` +
+    `<span class="key">↑/↓</span> vol  ` +
+    `<span class="key">m</span> mute  ` +
+    `<span class="key">q</span> quit`;
+
+  // Progress bar: block-filled like rich's ProgressBar.
+  const width = Math.max(10, Math.floor(els.bar.clientWidth / charW));
+  const ratio = duration > 0 ? Math.min(1, position / duration) : 0;
+  const filled = Math.round(ratio * width);
+  els.bar.innerHTML =
+    `<span>${"█".repeat(filled)}</span>` +
+    `<span class="rest">${"░".repeat(width - filled)}</span>`;
+}
+
+function tick() {
+  if (els.landing.classList.contains("hidden")) {
+    const position = audio.currentTime || 0;
+    const duration = isFinite(audio.duration) ? audio.duration : 0;
+    drawClock(position, duration);
+    drawCues(position);
+    drawFooter(position, duration);
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ---- transport ---- */
+function togglePause() {
+  if (audio.paused) audio.play().catch(() => {});
+  else audio.pause();
+}
+function seek(delta) {
+  const d = isFinite(audio.duration) ? audio.duration : Infinity;
+  audio.currentTime = Math.max(0, Math.min(audio.currentTime + delta, d));
+}
+function adjustVolume(delta) {
+  audio.muted = false;
+  audio.volume = clampVol(audio.volume + delta);
+  gain = audio.volume;
+}
+function toggleMute() { audio.muted = !audio.muted; }
+
+function quit() {
+  audio.pause();
+  audio.removeAttribute("src");
+  audio.load();
+  if (trackUrl) { URL.revokeObjectURL(trackUrl); trackUrl = null; }
+  els.landing.classList.remove("hidden");
+}
+
+/* ---- keyboard (mirrors src/ma3stro/keys.py mapping) ---- */
+window.addEventListener("keydown", (e) => {
+  if (!els.landing.classList.contains("hidden")) return;
+  switch (e.key) {
+    case " ":          e.preventDefault(); togglePause(); break;
+    case "ArrowLeft":  e.preventDefault(); seek(-SEEK_SECONDS); break;
+    case "ArrowRight": e.preventDefault(); seek(SEEK_SECONDS); break;
+    case "ArrowUp":    e.preventDefault(); adjustVolume(VOLUME_STEP); break;
+    case "ArrowDown":  e.preventDefault(); adjustVolume(-VOLUME_STEP); break;
+    case "m": case "M": toggleMute(); break;
+    case "q": case "Q": quit(); break;
+  }
+});
+
+// Click the progress bar to seek (web nicety; keyboard still works).
+els.bar.addEventListener("click", (e) => {
+  const d = isFinite(audio.duration) ? audio.duration : 0;
+  if (!d) return;
+  const rect = els.bar.getBoundingClientRect();
+  audio.currentTime = Math.max(0, Math.min(((e.clientX - rect.left) / rect.width) * d, d));
+});
+
+/* ---- loading files ---- */
+function showError(msg) { els.err.textContent = msg || ""; }
+
+async function loadCueFile(file) {
+  try {
+    const text = await file.text();
+    pendingCueText = text;
+    pendingCueName = file.name;
+    els.cueName.textContent = `cues: ${file.name}`;
+    showError("");
+  } catch (err) {
+    showError(`Could not read cues: ${err.message}`);
+  }
+}
+
+function startTrack(file) {
+  showError("");
+  if (trackUrl) URL.revokeObjectURL(trackUrl);
+  trackUrl = URL.createObjectURL(file);
+  audio.src = trackUrl;
+  audio.volume = gain;
+
+  // Resolve cues: explicitly chosen file, else none.
+  if (pendingCueText != null) {
+    try { sheet = parseCueText(pendingCueText, pendingCueName); }
+    catch (err) { showError(`Cue parse error: ${err.message}`); sheet = new CueSheet([]); }
+  } else {
+    sheet = new CueSheet([]);
+  }
+
+  els.clockTitle.textContent = file.name;
+  measureCell();
+
+  const begin = () => {
+    if (startOffset > 0) {
+      try { audio.currentTime = startOffset; } catch (_) {}
+    }
+    audio.play().catch(() => {/* autoplay blocked — space resumes */});
+    els.landing.classList.add("hidden");
+  };
+  if (audio.readyState >= 1) begin();
+  else audio.addEventListener("loadedmetadata", begin, { once: true });
+
+  audio.onerror = () => {
+    els.landing.classList.remove("hidden");
+    showError(`Could not load audio: ${file.name}`);
+  };
+}
+
+// Drag & drop onto the landing screen.
+["dragenter", "dragover"].forEach((ev) =>
+  els.drop.addEventListener(ev, (e) => {
+    e.preventDefault(); els.drop.classList.add("over");
+  }));
+["dragleave", "drop"].forEach((ev) =>
+  els.drop.addEventListener(ev, (e) => {
+    e.preventDefault(); els.drop.classList.remove("over");
+  }));
+
+els.drop.addEventListener("drop", async (e) => {
+  const files = [...(e.dataTransfer?.files || [])];
+  const cue = files.find((f) => /\.(ya?ml|json)$/i.test(f.name));
+  const audioFile = files.find((f) => f.type.startsWith("audio/")) ||
+                    files.find((f) => !/\.(ya?ml|json)$/i.test(f.name));
+  if (cue) await loadCueFile(cue);
+  if (audioFile) startTrack(audioFile);
+  else if (!cue) showError("No audio file in that drop.");
+});
+
+els.fileAudio.addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  if (f) startTrack(f);
+});
+els.fileCues.addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  if (f) loadCueFile(f);
+});
+
+window.addEventListener("resize", measureCell);
+audio.addEventListener("play", () => { playing = true; });
+audio.addEventListener("pause", () => { playing = false; });
+
+measureCell();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
