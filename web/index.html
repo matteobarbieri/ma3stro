@@ -79,9 +79,11 @@
   #clock-section .art { color: var(--fg); font-weight: 400; }
   #clock-sub { color: var(--dim); margin-top: 0.5em; font-size: 0.95em; }
 
-  #cues-panel { flex: 0 0 28ch; overflow: hidden; }
+  #cues-panel { flex: 0 0 28ch; }
   #cues-panel.hidden { display: none; }
-  #cues { font-size: 0.95em; line-height: 1.5; white-space: pre-wrap; }
+  /* Clip on the inner element, not the panel — the panel must stay
+     overflow-visible so its title chip can sit on the top border. */
+  #cues { font-size: 0.95em; line-height: 1.5; white-space: pre-wrap; overflow: hidden; }
   .label-dim   { color: var(--dim); }
   .now-label   { color: var(--green); font-weight: 700; }
   .next-label  { color: var(--yellow); font-weight: 700; }
@@ -98,8 +100,8 @@
   #controls .status-pause { color: var(--yellow); font-weight: 700; }
   #controls .vol          { color: var(--cyan); font-weight: 700; }
   #controls .key { color: var(--fg); font-weight: 700; }
-  #bar { white-space: pre; color: var(--cyan); line-height: 1; cursor: pointer;
-         letter-spacing: 0; user-select: none; }
+  #bar { white-space: nowrap; overflow: hidden; color: var(--cyan); line-height: 1;
+         cursor: pointer; letter-spacing: 0; user-select: none; }
   #bar .rest { color: var(--dim); }
 
   /* ---- landing screen ---- */
@@ -548,8 +550,10 @@ function drawFooter(position, duration) {
     `<span class="key">m</span> mute  ` +
     `<span class="key">q</span> quit`;
 
-  // Progress bar: block-filled like rich's ProgressBar.
-  const width = Math.max(10, Math.floor(els.bar.clientWidth / charW));
+  // Progress bar: block-filled like rich's ProgressBar. Keep a 1-char margin
+  // since the shade glyph may fall back to a slightly wider font; #bar clips
+  // any remainder so it can never spill past the panel.
+  const width = Math.max(10, Math.floor(els.bar.clientWidth / charW) - 1);
   const ratio = duration > 0 ? Math.min(1, position / duration) : 0;
   const filled = Math.round(ratio * width);
   els.bar.innerHTML =
