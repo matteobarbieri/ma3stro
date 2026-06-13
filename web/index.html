@@ -651,7 +651,7 @@ function startTrack(file) {
     if (startOffset > 0) {
       try { audio.currentTime = startOffset; } catch (_) {}
     }
-    audio.play().catch(() => {/* autoplay blocked — space resumes */});
+    // Stay paused on load; playback starts on the first `space`.
     els.landing.classList.add("hidden");
   };
   if (audio.readyState >= 1) begin();
