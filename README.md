@@ -102,5 +102,9 @@ sheet with **Add cues** (the same `.cues.yaml` format, or `.json` with the
 same shape). Supported audio is whatever the browser can play
 (`wav`, `mp3`, `m4a`, `ogg`, `flac`, …).
 
-You can pre-set the CLI-equivalent flags via the URL query string:
-`index.html?volume=70&start=30` (volume 0–100, start in seconds).
+As a section approaches, a large countdown appears below the clock in the
+final few seconds (8 by default).
+
+You can pre-set options via the URL query string:
+`index.html?volume=70&start=30&lead=8` — volume 0–100, start in seconds, and
+`lead` seconds for the approaching-section countdown.

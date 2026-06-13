@@ -79,6 +79,29 @@
   #clock-section .art { color: var(--fg); font-weight: 400; }
   #clock-sub { color: var(--dim); margin-top: 0.5em; font-size: 0.95em; }
 
+  /* Approaching-section countdown: surfaces only in the final lead-in seconds,
+     but its slot is reserved at all times (visibility, not display) so showing
+     it never reflows the clock or anything else. */
+  #countdown {
+    margin-top: 0.4em; height: 1.6em; line-height: 1.6em;
+    display: flex; flex-direction: row; align-items: baseline; justify-content: center;
+    gap: 0.6ch; font-size: clamp(0.95rem, 2.6vh, 1.5rem);
+    white-space: nowrap;
+  }
+  #countdown.hidden { display: none; }       /* no cues at all */
+  #countdown.inactive { visibility: hidden; } /* cues present, but not yet near */
+  #countdown .cd-label { color: var(--yellow); font-weight: 700; }
+  #countdown .cd-label .art { color: var(--fg); font-weight: 400; }
+  #countdown .cd-num {
+    color: var(--yellow); font-weight: 700; min-width: 2ch; text-align: center;
+    display: inline-block; transform-origin: center;
+  }
+  #countdown .cd-num.tick { animation: cd-pop 0.4s ease-out; }
+  @keyframes cd-pop {
+    from { transform: scale(1.6); opacity: 0.4; }
+    to   { transform: scale(1);   opacity: 1; }
+  }
+
   #cues-panel { flex: 0 0 28ch; }
   #cues-panel.hidden { display: none; }
   /* Clip on the inner element, not the panel — the panel must stay
@@ -171,6 +194,10 @@
         <pre id="clock"></pre>
         <div id="clock-section" class="hidden"></div>
         <div id="clock-sub">00:00 / 00:00</div>
+        <div id="countdown" class="hidden">
+          <span class="cd-label"></span>
+          <span class="cd-num"></span>
+        </div>
       </div>
     </div>
     <div id="cues-panel" class="panel magenta hidden">
@@ -411,6 +438,7 @@ function renderBig(text, maxW, maxH) {
 
 const SEEK_SECONDS = 5;
 const VOLUME_STEP = 0.05;
+const COUNTDOWN_LEAD = 8;  // seconds before a section to surface the big countdown
 
 const audio = document.getElementById("audio");
 const els = {
@@ -423,6 +451,9 @@ const els = {
   clock: document.getElementById("clock"),
   clockSection: document.getElementById("clock-section"),
   clockSub: document.getElementById("clock-sub"),
+  countdown: document.getElementById("countdown"),
+  cdNum: document.querySelector("#countdown .cd-num"),
+  cdLabel: document.querySelector("#countdown .cd-label"),
   clockTitle: document.getElementById("clock-title"),
   cuesPanel: document.getElementById("cues-panel"),
   cues: document.getElementById("cues"),
@@ -443,6 +474,8 @@ const params = new URLSearchParams(location.search);
 const startVolume = clampVol(params.has("volume")
   ? parseFloat(params.get("volume")) / 100 : 0.5);
 const startOffset = params.has("start") ? parseFloat(params.get("start")) : 0;
+const countdownLead = params.has("lead")
+  ? Math.max(1, parseFloat(params.get("lead")) || COUNTDOWN_LEAD) : COUNTDOWN_LEAD;
 gain = startVolume;
 
 function clampVol(v) { return Math.max(0, Math.min(1, isNaN(v) ? 0.5 : v)); }
@@ -482,6 +515,7 @@ function drawCues(position) {
   if (!sheet.cues.length) {
     els.cuesPanel.classList.add("hidden");
     els.clockSection.classList.add("hidden");
+    els.countdown.classList.add("hidden");
     return;
   }
   els.cuesPanel.classList.remove("hidden");
@@ -506,6 +540,30 @@ function drawCues(position) {
     parts.push(line);
   } else {
     parts.push(`<span class="label-dim">—</span>`);
+  }
+
+  // Approaching-section countdown in the final lead-in seconds. The slot is
+  // always reserved (toggle `inactive`/visibility, never `display`) so showing
+  // it never shifts the clock.
+  els.countdown.classList.remove("hidden");
+  const nextCue = upcoming[0];
+  const remaining = nextCue ? nextCue.time - position : Infinity;
+  if (sheet.showCountdown && remaining > 0 && remaining <= countdownLead) {
+    const secs = Math.ceil(remaining);
+    els.countdown.classList.remove("inactive");
+    els.cdLabel.innerHTML = `↪ ${esc(nextCue.label)}` +
+      (nextCue.art ? `  <span class="art">${esc(nextCue.art)}</span>` : "") + " in";
+    els.cdNum.textContent = `${secs}s`;
+    // Re-trigger the pop animation on each whole-second change.
+    if (els.countdown.dataset.secs !== String(secs)) {
+      els.countdown.dataset.secs = String(secs);
+      els.cdNum.classList.remove("tick");
+      void els.cdNum.offsetWidth;  // force reflow so the animation restarts
+      els.cdNum.classList.add("tick");
+    }
+  } else {
+    els.countdown.classList.add("inactive");
+    delete els.countdown.dataset.secs;
   }
 
   parts.push(`<span class="blank"></span>`);
