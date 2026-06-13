@@ -22,6 +22,15 @@ with warnings.catch_warnings():
     from pydub import AudioSegment
 
 
+# Frames per audio callback. The default (0, "pick a small buffer") leaves only
+# ~30ms of slack on CoreAudio, which the GIL-holding 15Hz full-screen redraw can
+# exhaust, starving the callback and producing crackle. ~4096 frames (~90ms at
+# 44.1kHz) gives PortAudio enough headroom to ride out those stalls; the only
+# cost is that transport changes (pause/seek/mute) land one block later, which
+# is imperceptible here.
+_BLOCKSIZE = 4096
+
+
 class Player:
     def __init__(self, path: str | Path):
         self.path = Path(path)
@@ -56,6 +65,7 @@ class Player:
             samplerate=self.samplerate,
             channels=self.channels,
             dtype="float32",
+            blocksize=_BLOCKSIZE,
             callback=self._callback,
         )
         self._stream.start()
