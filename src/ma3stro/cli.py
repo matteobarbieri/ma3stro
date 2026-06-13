@@ -22,6 +22,16 @@ VOLUME_STEP = 0.05
 REFRESH_HZ = 15
 
 
+def _volume_arg(value: str) -> int:
+    try:
+        v = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"volume must be an integer, got {value!r}")
+    if not 0 <= v <= 100:
+        raise argparse.ArgumentTypeError(f"volume must be between 0 and 100, got {v}")
+    return v
+
+
 def _check_ffmpeg(track: Path) -> None:
     if track.suffix.lower() == ".wav":
         return
@@ -49,6 +59,10 @@ def main(argv: list[str] | None = None) -> int:
         "--start", metavar="SECONDS", type=float, default=0.0,
         help="start playback at this offset (seconds)",
     )
+    parser.add_argument(
+        "--volume", metavar="LEVEL", type=_volume_arg, default=50,
+        help="initial volume level (0-100, default: 50)",
+    )
     parser.add_argument("--version", action="version", version=f"ma3stro {__version__}")
     args = parser.parse_args(argv)
 
@@ -68,6 +82,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.start:
         player.seek_to(args.start)
+
+    player.set_volume(args.volume / 100.0)
 
     renderer = Renderer(console, sheet, show_countdown, title=track.name)
 

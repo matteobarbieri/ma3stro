@@ -107,6 +107,13 @@ class Player:
             if self._gain > 0:
                 self._muted = False
 
+    def set_volume(self, gain: float) -> None:
+        """Set the playback gain to an absolute value (clamped to [0, 1])."""
+        with self._lock:
+            self._gain = max(0.0, min(1.0, gain))
+            if self._gain > 0:
+                self._muted = False
+
     def toggle_mute(self) -> None:
         with self._lock:
             self._muted = not self._muted
