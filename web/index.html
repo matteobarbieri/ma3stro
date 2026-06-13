@@ -70,7 +70,14 @@
     white-space: pre;
     text-shadow: 0 0 6px rgba(69, 214, 214, 0.35);
   }
-  #clock-sub { color: var(--dim); margin-top: 0.8em; font-size: 0.95em; }
+  #clock-section {
+    color: var(--green); font-weight: 700;
+    margin-top: 0.6em; font-size: clamp(1.4rem, 4vh, 2.6rem);
+    letter-spacing: 0.05ch; text-align: center; line-height: 1.1;
+  }
+  #clock-section.hidden { display: none; }
+  #clock-section .art { color: var(--fg); font-weight: 400; }
+  #clock-sub { color: var(--dim); margin-top: 0.5em; font-size: 0.95em; }
 
   #cues-panel { flex: 0 0 28ch; overflow: hidden; }
   #cues-panel.hidden { display: none; }
@@ -160,6 +167,7 @@
       <span class="title" id="clock-title">track</span>
       <div id="clock-wrap">
         <pre id="clock"></pre>
+        <div id="clock-section" class="hidden"></div>
         <div id="clock-sub">00:00 / 00:00</div>
       </div>
     </div>
@@ -411,6 +419,7 @@ const els = {
   fileAudio: document.getElementById("file-audio"),
   fileCues: document.getElementById("file-cues"),
   clock: document.getElementById("clock"),
+  clockSection: document.getElementById("clock-section"),
   clockSub: document.getElementById("clock-sub"),
   clockTitle: document.getElementById("clock-title"),
   cuesPanel: document.getElementById("cues-panel"),
@@ -468,11 +477,24 @@ function esc(s) {
 }
 
 function drawCues(position) {
-  if (!sheet.cues.length) { els.cuesPanel.classList.add("hidden"); return; }
+  if (!sheet.cues.length) {
+    els.cuesPanel.classList.add("hidden");
+    els.clockSection.classList.add("hidden");
+    return;
+  }
   els.cuesPanel.classList.remove("hidden");
 
   const current = sheet.current(position);
   const upcoming = sheet.upcoming(position);
+
+  // Current section name, large, below the clock.
+  els.clockSection.classList.remove("hidden");
+  if (current) {
+    els.clockSection.innerHTML = esc(current.label) +
+      (current.art ? `  <span class="art">${esc(current.art)}</span>` : "");
+  } else {
+    els.clockSection.innerHTML = `<span class="art">—</span>`;
+  }
   const parts = [];
 
   parts.push(`<span class="heading">NOW</span>`);
